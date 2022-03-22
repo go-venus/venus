@@ -151,15 +151,14 @@ func (s *DB[T]) Select(values *[]T) (err error) {
 	return rows.Close()
 }
 
-func (s *DB[T]) Count() (int64, error) {
+func (s *DB[T]) Count() (n int64, err error) {
 	s.clause.Set(clause.Count, s.RefTable().TableName)
 	sqlStr, vars := s.clause.Build(clause.Count, clause.Where)
 	row := s.Raw(sqlStr, vars...).QueryRow()
-	var tmp int64
-	if err := row.Scan(&tmp); err != nil {
-		return 0, err
+	if err = row.Scan(&n); err != nil {
+		return
 	}
-	return tmp, nil
+	return
 }
 
 func (s *DB[T]) Limit(num int) *DB[T] {

@@ -3,6 +3,7 @@ package venus
 import (
 	"database/sql"
 
+	"github.com/chenquan/zap-plus/log"
 	"github.com/go-venus/venus/schema"
 	"github.com/go-venus/venus/session"
 )
@@ -12,8 +13,13 @@ type Engine struct {
 	dialect schema.Dialect
 }
 
-func NewEngine(driver, source string) (e *Engine, err error) {
-	db, err := sql.Open(driver, source)
+func Open(config *Config) (e *Engine, err error) {
+	err = log.NewLogger(&config.Config)
+	if err != nil {
+		return
+	}
+
+	db, err := sql.Open(config.Driver, config.Source)
 	if err != nil {
 		return
 	}
@@ -22,7 +28,7 @@ func NewEngine(driver, source string) (e *Engine, err error) {
 		return
 	}
 	// make sure the specific dialect exists
-	dial, err := schema.GetDialect(driver)
+	dial, err := schema.GetDialect(config.Driver)
 	if err != nil {
 		return
 	}
