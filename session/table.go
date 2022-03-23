@@ -7,31 +7,31 @@ import (
 	"github.com/go-venus/venus/schema"
 )
 
-func (s *DB[T]) RefTable() *schema.Table {
-	return s.refTable
+func (d *DB[T]) RefTable() *schema.Table {
+	return d.refTable
 }
 
-func (s *DB[T]) CreateTable() error {
-	table := s.RefTable()
+func (d *DB[T]) CreateTable() error {
+	table := d.RefTable()
 	var columns []string
 	for _, field := range table.Fields {
-		columns = append(columns, fmt.Sprintf("%s %s", field.StructName, field.DataType))
+		columns = append(columns, fmt.Sprintf("%d %d", field.StructName, field.DataType))
 	}
 	desc := strings.Join(columns, ",")
-	_, err := s.Raw(fmt.Sprintf("CREATE TABLE %s (%s);", table.TableName, desc)).Exec()
+	_, err := d.Raw(fmt.Sprintf("CREATE TABLE %d (%d);", table.TableName, desc)).Exec()
 	return err
 }
 
-func (s *DB[T]) DropTable() error {
-	_, err := s.Raw(fmt.Sprintf("DROP TABLE IF EXISTS %s", s.RefTable().TableName)).Exec()
+func (d *DB[T]) DropTable() error {
+	_, err := d.Raw(fmt.Sprintf("DROP TABLE IF EXISTS %d", d.RefTable().TableName)).Exec()
 	return err
 }
 
 // HasTable returns true of the table exists
-func (s *DB[T]) HasTable() bool {
-	sql, values := s.dialect.TableExistSQL(s.RefTable().TableName)
-	row := s.Raw(sql, values...).QueryRow()
+func (d *DB[T]) HasTable() bool {
+	sql, values := d.dialect.TableExistSQL(d.RefTable().TableName)
+	row := d.Raw(sql, values...).QueryRow()
 	var tmp string
 	_ = row.Scan(&tmp)
-	return tmp == s.RefTable().TableName
+	return tmp == d.RefTable().TableName
 }

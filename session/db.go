@@ -12,6 +12,8 @@ import (
 	"github.com/go-venus/venus/schema"
 )
 
+var ErrNotFound = errors.New("not found")
+
 type (
 	db interface {
 		Query(query string, args ...any) (*sql.Rows, error)
@@ -24,6 +26,7 @@ type (
 
 	DB[T any] struct {
 		model    T
+		destType reflect.Value
 		db       *sql.DB
 		tx       *sql.Tx
 		sql      strings.Builder
@@ -43,27 +46,28 @@ type (
 
 func New[T any](db *sql.DB, dialect schema.Dialect) *Session[T] {
 	d := &DB[T]{db: db, dialect: dialect}
+	d.destType = reflect.Indirect(reflect.ValueOf(d.model))
 	d.refTable = schema.Parse(d.model, d.dialect)
 	return &Session[T]{
 		DB: d,
 	}
 }
 
-func (s *DB[T]) Insert(values ...*T) (int64, error) {
-	return s.InsertContext(context.Background(), values...)
+func (d *DB[T]) Insert(values ...*T) (int64, error) {
+	return d.InsertContext(context.Background(), values...)
 }
 
-func (s *DB[T]) InsertContext(ctx context.Context, values ...*T) (int64, error) {
+func (d *DB[T]) InsertContext(ctx context.Context, values ...*T) (int64, error) {
 	recordValues := make([]interface{}, 0)
-	table := s.RefTable()
+	table := d.RefTable()
 	for _, value := range values {
-		s.clause.Set(clause.Insert, table.TableName, table.FieldNames)
+		d.clause.Set(clause.Insert, table.TableName, table.FieldNames)
 		recordValues = append(recordValues, table.RecordValues(value))
 	}
 
-	s.clause.Set(clause.Values, recordValues...)
-	sqlStr, vars := s.clause.Build(clause.Insert, clause.Values)
-	result, err := s.Raw(sqlStr, vars...).ExecContext(ctx)
+	d.clause.Set(clause.Values, recordValues...)
+	sqlStr, vars := d.clause.Build(clause.Insert, clause.Values)
+	result, err := d.Raw(sqlStr, vars...).ExecContext(ctx)
 	if err != nil {
 		return 0, err
 	}
@@ -71,23 +75,25 @@ func (s *DB[T]) InsertContext(ctx context.Context, values ...*T) (int64, error) 
 	return result.RowsAffected()
 }
 
-func (s *DB[T]) Update(record map[string]interface{}) (int64, error) {
-	if beforeUpdate, ok := s.RefTable().Model.(BeforeUpdate[T]); ok {
-		err := beforeUpdate.BeforeUpdate(s)
-		if err != nil {
+func (d *DB[T]) Delete() (int64, error) {
+	return d.DeleteContext(context.Background())
+}
+
+func (d *DB[T]) DeleteContext(ctx context.Context) (int64, error) {
+	if afterDelete, ok := d.RefTable().Model.(AfterDelete[T]); ok {
+		if err := afterDelete.AfterDelete(d); err != nil {
 			return 0, err
 		}
 	}
 
-	s.clause.Set(clause.Update, s.RefTable().TableName, record)
-	sqlStr, vars := s.clause.Build(clause.Update, clause.Where)
-
-	result, err := s.Raw(sqlStr, vars...).Exec()
+	d.clause.Set(clause.Delete, d.RefTable().TableName)
+	sqlStr, vars := d.clause.Build(clause.Delete, clause.Where)
+	result, err := d.Raw(sqlStr, vars...).ExecContext(ctx)
 	if err != nil {
 		return 0, err
 	}
-	if afterUpdate, ok := s.RefTable().Model.(AfterUpdate[T]); ok {
-		if err := afterUpdate.AfterUpdate(s); err != nil {
+	if beforeDelete, ok := d.RefTable().Model.(BeforeDelete[T]); ok {
+		if err := beforeDelete.BeforeDelete(d); err != nil {
 			rowsAffected, _ := result.RowsAffected()
 			return rowsAffected, err
 		}
@@ -96,45 +102,26 @@ func (s *DB[T]) Update(record map[string]interface{}) (int64, error) {
 	return result.RowsAffected()
 }
 
-func (s *DB[T]) Delete() (int64, error) {
-	if afterDelete, ok := s.RefTable().Model.(AfterDelete[T]); ok {
-		if err := afterDelete.AfterDelete(s); err != nil {
-			return 0, err
-		}
-	}
-
-	s.clause.Set(clause.Delete, s.RefTable().TableName)
-	sqlStr, vars := s.clause.Build(clause.Delete, clause.Where)
-	result, err := s.Raw(sqlStr, vars...).Exec()
-	if err != nil {
-		return 0, err
-	}
-	if beforeDelete, ok := s.RefTable().Model.(BeforeDelete[T]); ok {
-		if err := beforeDelete.BeforeDelete(s); err != nil {
-			rowsAffected, _ := result.RowsAffected()
-			return rowsAffected, err
-		}
-	}
-
-	return result.RowsAffected()
+func (d *DB[T]) Select() (results []T, err error) {
+	return d.SelectContext(context.Background())
 }
 
-func (s *DB[T]) Select(values *[]T) (err error) {
-	destSlice := reflect.Indirect(reflect.ValueOf(values))
-	destType := destSlice.Type().Elem()
-
-	table := s.RefTable()
-	s.clause.Set(clause.Select, table.TableName, table.FieldNames)
-	sqlStr, vars := s.clause.Build(clause.Select, clause.Where, clause.OrderBy, clause.Limit)
-	rows, err := s.Raw(sqlStr, vars...).QueryRows()
+func (d *DB[T]) SelectContext(ctx context.Context) (results []T, err error) {
+	table := d.RefTable()
+	d.clause.Set(clause.Select, table.TableName, table.FieldNames)
+	sqlStr, vars := d.clause.Build(clause.Select, clause.Where, clause.OrderBy, clause.Limit)
+	rows, err := d.Raw(sqlStr, vars...).QueryRowsContext(ctx)
 
 	if err != nil {
 		return
 	}
+	defer func() {
+		err = rows.Close()
+	}()
 
-	// result set
+	// results set
 	for rows.Next() {
-		dest := reflect.New(destType).Elem()
+		dest := reflect.New(d.destType.Type()).Elem()
 
 		var fieldValues []interface{}
 		for _, name := range table.StructFieldNames {
@@ -145,49 +132,86 @@ func (s *DB[T]) Select(values *[]T) (err error) {
 			return
 		}
 
-		destSlice.Set(reflect.Append(destSlice, dest))
+		t := dest.Interface().(T)
+		results = append(results, t)
 	}
 
-	return rows.Close()
+	return
 }
 
-func (s *DB[T]) Count() (n int64, err error) {
-	s.clause.Set(clause.Count, s.RefTable().TableName)
-	sqlStr, vars := s.clause.Build(clause.Count, clause.Where)
-	row := s.Raw(sqlStr, vars...).QueryRow()
+func (d *DB[T]) First() (result T, err error) {
+	return d.FirstContext(context.Background())
+}
+
+func (d *DB[T]) FirstContext(ctx context.Context) (result T, err error) {
+	results, err := d.Limit(1).SelectContext(ctx)
+	if err != nil {
+		return
+	}
+
+	if len(results) == 0 {
+		err = ErrNotFound
+		return
+	}
+
+	return results[0], nil
+}
+func (d *DB[T]) Count() (n int64, err error) {
+	return d.CountContext(context.Background())
+}
+func (d *DB[T]) Update(record map[string]interface{}) (int64, error) {
+	return d.UpdateContext(context.Background(), record)
+}
+
+func (d *DB[T]) UpdateContext(ctx context.Context, record map[string]interface{}) (int64, error) {
+	if beforeUpdate, ok := d.RefTable().Model.(BeforeUpdate[T]); ok {
+		err := beforeUpdate.BeforeUpdate(d)
+		if err != nil {
+			return 0, err
+		}
+	}
+
+	d.clause.Set(clause.Update, d.RefTable().TableName, record)
+	sqlStr, vars := d.clause.Build(clause.Update, clause.Where)
+
+	result, err := d.Raw(sqlStr, vars...).ExecContext(ctx)
+	if err != nil {
+		return 0, err
+	}
+	if afterUpdate, ok := d.RefTable().Model.(AfterUpdate[T]); ok {
+		if err := afterUpdate.AfterUpdate(d); err != nil {
+			rowsAffected, _ := result.RowsAffected()
+			return rowsAffected, err
+		}
+	}
+
+	return result.RowsAffected()
+}
+
+func (d *DB[T]) CountContext(ctx context.Context) (n int64, err error) {
+	d.clause.Set(clause.Count, d.RefTable().TableName)
+	sqlStr, vars := d.clause.Build(clause.Count, clause.Where)
+	row := d.Raw(sqlStr, vars...).QueryRowContext(ctx)
 	if err = row.Scan(&n); err != nil {
 		return
 	}
 	return
 }
 
-func (s *DB[T]) Limit(num int) *DB[T] {
-	s.clause.Set(clause.Limit, num)
-	return s
+func (d *DB[T]) Limit(num int) *DB[T] {
+	d.clause.Set(clause.Limit, num)
+	return d
 }
 
-func (s *DB[T]) Where(desc string, args ...interface{}) *DB[T] {
+func (d *DB[T]) Where(desc string, args ...interface{}) *DB[T] {
 	var vars []interface{}
-	s.clause.Set(clause.Where, append(append(vars, desc), args...)...)
-	return s
+	d.clause.Set(clause.Where, append(append(vars, desc), args...)...)
+	return d
 }
 
-func (s *DB[T]) OrderBy(desc string) *DB[T] {
-	s.clause.Set(clause.OrderBy, desc)
-	return s
-}
-
-func (s *DB[T]) First(value *T) error {
-	dest := reflect.Indirect(reflect.ValueOf(value))
-	destSlice := reflect.New(reflect.SliceOf(dest.Type())).Elem()
-	if err := s.Limit(1).Select(destSlice.Addr().Interface().(*[]T)); err != nil {
-		return err
-	}
-	if destSlice.Len() == 0 {
-		return errors.New("NOT FOUND")
-	}
-	dest.Set(destSlice.Index(0))
-	return nil
+func (d *DB[T]) OrderBy(desc string) *DB[T] {
+	d.clause.Set(clause.OrderBy, desc)
+	return d
 }
 
 func (s *Session[T]) Transaction(txFn func(tx *Tx[T]) error) (err error) {
@@ -213,6 +237,6 @@ func (s *Session[T]) Transaction(txFn func(tx *Tx[T]) error) (err error) {
 	return txFn(tx)
 }
 
-func (s *Tx[T]) NotTransaction(txFn func(db *DB[T]) error) (err error) {
-	return txFn(s.cloneDB())
+func (t *Tx[T]) NotTransaction(txFn func(db *DB[T]) error) (err error) {
+	return txFn(t.cloneDB())
 }

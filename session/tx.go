@@ -5,15 +5,15 @@ import (
 	"database/sql"
 )
 
-func (s *DB[T]) cloneDB() *DB[T] {
+func (d *DB[T]) cloneDB() *DB[T] {
 	return &DB[T]{
-		model:    s.model,
-		db:       s.db,
-		sql:      s.sql,
-		sqlVars:  s.sqlVars,
-		dialect:  s.dialect,
-		refTable: s.refTable,
-		clause:   s.clause,
+		model:    d.model,
+		db:       d.db,
+		sql:      d.sql,
+		sqlVars:  d.sqlVars,
+		dialect:  d.dialect,
+		refTable: d.refTable,
+		clause:   d.clause,
 	}
 }
 func (s *Session[T]) Begin() (tx *Tx[T], err error) {
@@ -33,12 +33,12 @@ func (s *Session[T]) BeginTx(ctx context.Context) (tx *Tx[T], err error) {
 	}, err
 }
 
-func (s *Tx[T]) Commit() (err error) {
-	err = s.tx.Commit()
+func (t *Tx[T]) Commit() (err error) {
+	err = t.tx.Commit()
 	return
 }
 
-func (s *Tx[T]) Rollback() (err error) {
-	err = s.tx.Rollback()
+func (t *Tx[T]) Rollback() (err error) {
+	err = t.tx.Rollback()
 	return
 }
