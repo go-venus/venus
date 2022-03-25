@@ -10,11 +10,11 @@ func (d *DB[T]) cloneDB() *DB[T] {
 	return &DB[T]{
 		model:    d.model,
 		db:       d.db,
-		sql:      d.sql,
-		sqlVars:  d.sqlVars,
+		Sql:      d.Sql,
+		SqlVars:  d.SqlVars,
 		dialect:  d.dialect,
 		refTable: d.refTable,
-		clause:   d.clause,
+		Clause:   d.Clause,
 	}
 }
 func (s *Session[T]) Transaction(txFn func(tx *Tx[T]) error) (err error) {
