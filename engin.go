@@ -3,7 +3,6 @@ package venus
 import (
 	"database/sql"
 
-	"github.com/chenquan/zap-plus/log"
 	"github.com/go-venus/venus/schema"
 	"github.com/go-venus/venus/session"
 )
@@ -14,11 +13,6 @@ type Engine struct {
 }
 
 func Open(config *Config) (e *Engine, err error) {
-	err = log.NewLogger(&config.Config)
-	if err != nil {
-		return
-	}
-
 	db, err := sql.Open(config.Driver, config.Source)
 	if err != nil {
 		return
