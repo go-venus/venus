@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/go-venus/venus/clause"
+	"github.com/go-venus/venus/dialect"
 	"github.com/go-venus/venus/schema"
 )
 
@@ -30,7 +31,7 @@ type (
 		tx       *sql.Tx
 		Sql      strings.Builder
 		SqlVars  []any
-		dialect  schema.Dialect
+		dialect  dialect.Dialect
 		refTable *schema.Table
 		Clause   clause.Clause
 	}
@@ -43,10 +44,10 @@ type (
 	}
 )
 
-func New[T any](db *sql.DB, dialect schema.Dialect) *Session[T] {
+func New[T any](db *sql.DB, dialect dialect.Dialect) *Session[T] {
 	d := &DB[T]{db: db, dialect: dialect}
 	d.DestType = reflect.Indirect(reflect.ValueOf(d.model))
-	d.refTable = schema.Parse(d.model, d.dialect)
+	d.refTable = schema.Parse(d.model)
 	return &Session[T]{
 		DB: d,
 	}

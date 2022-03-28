@@ -3,13 +3,13 @@ package venus
 import (
 	"database/sql"
 
-	"github.com/go-venus/venus/schema"
+	"github.com/go-venus/venus/dialect"
 	"github.com/go-venus/venus/session"
 )
 
 type Engine struct {
 	db      *sql.DB
-	dialect schema.Dialect
+	dialect dialect.Dialect
 }
 
 func Open(config *Config) (e *Engine, err error) {
@@ -22,7 +22,7 @@ func Open(config *Config) (e *Engine, err error) {
 		return
 	}
 	// make sure the specific dialect exists
-	dial, err := schema.GetDialect(config.Driver)
+	dial, err := dialect.GetDialect(config.Driver)
 	if err != nil {
 		return
 	}

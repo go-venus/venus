@@ -16,9 +16,8 @@ type User struct {
 }
 
 func TestParse(t *testing.T) {
-	var TestDial, _ = GetDialect("mysql")
 
-	schema := Parse(&User{}, TestDial)
+	schema := Parse(&User{})
 	if schema.TableName != "User" || len(schema.Fields) != 2 {
 		t.Fatal("failed to parse User struct")
 	}

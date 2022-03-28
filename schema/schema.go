@@ -29,7 +29,7 @@ func (s *Table) GetField(name string) *Field {
 	return s.fieldMap[name]
 }
 
-func Parse[T any](model T, d Dialect) *Table {
+func Parse[T any](model T) *Table {
 	modelType := reflect.Indirect(reflect.ValueOf(model)).Type()
 	tableName := strings.ToLower(modelType.Name())
 	table, _, _ := singleFlight.Do(tableName, func() (interface{}, error) {
