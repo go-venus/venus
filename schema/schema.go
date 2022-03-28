@@ -1,7 +1,6 @@
 package schema
 
 import (
-	"errors"
 	"reflect"
 	"strings"
 	"sync"
@@ -10,10 +9,9 @@ import (
 )
 
 var (
-	ErrUnsupportedDataType = errors.New("unsupported data type")
-	singleFlight           = singleflight.Group{}
-	tableCache             = map[string]*Table{}
-	rwTableCache           = sync.RWMutex{}
+	singleFlight = singleflight.Group{}
+	tableCache   = map[string]*Table{}
+	rwTableCache = sync.RWMutex{}
 )
 
 type TableName = string
@@ -58,8 +56,6 @@ func Parse[T any](model T, d Dialect) *Table {
 					FieldType:  p.Type,
 				}
 
-				field.DataType = DataType(d.DataTypeOf(field))
-
 				if _, ok := p.Tag.Lookup("venus"); ok {
 					field.Tag = ParseTag(p.Tag, ";")
 				}
@@ -90,10 +86,9 @@ func Parse[T any](model T, d Dialect) *Table {
 	return table.(*Table)
 }
 
-// RecordValues 提取记录数据
 func (s *Table) RecordValues(dest interface{}) []interface{} {
 	destValue := reflect.Indirect(reflect.ValueOf(dest))
-	// 字段数据
+
 	var fieldValues []interface{}
 	for _, field := range s.Fields {
 		fieldValues = append(fieldValues, destValue.FieldByName(field.StructName).Interface())
