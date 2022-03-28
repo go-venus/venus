@@ -4,7 +4,7 @@ import (
 	"testing"
 
 	"github.com/DATA-DOG/go-sqlmock"
-	"github.com/go-venus/venus/schema"
+	"github.com/go-venus/venus/dialect"
 )
 
 func TestNew(t *testing.T) {
@@ -22,8 +22,8 @@ func TestNew(t *testing.T) {
 	mock.ExpectExec("INSERT INTO `user` (name) VALUES (?)").WithArgs("1").WillReturnResult(sqlmock.NewResult(1, 1))
 	// mock.ExpectCommit()
 
-	var TestDial, _ = schema.GetDialect("mysql")
+	var TestDial, _ = dialect.GetDialect("mysql")
 
 	s := New[User](db, TestDial)
-	s.Insert(&User{Name: "1"})
+	s.Insert(User{Name: "1"})
 }

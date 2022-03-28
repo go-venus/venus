@@ -1,7 +1,8 @@
-package schema
+package dialect
 
 import (
 	"errors"
+	"reflect"
 	"sync"
 )
 
@@ -14,7 +15,7 @@ var ErrNotFoundDialect = errors.New("not found dialect")
 
 // Dialect getDB Dialect
 type Dialect interface {
-	DataTypeOf(field *Field) string
+	DataTypeOf(t reflect.Value) string
 	TableExistSQL(tableName string) (string, []any)
 }
 
