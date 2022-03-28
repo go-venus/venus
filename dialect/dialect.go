@@ -15,7 +15,7 @@ var ErrNotFoundDialect = errors.New("not found dialect")
 
 // Dialect getDB Dialect
 type Dialect interface {
-	DataTypeOf(t reflect.Value) string
+	DataTypeOf(v reflect.Value) string
 	TableExistSQL(tableName string) (string, []any)
 }
 
